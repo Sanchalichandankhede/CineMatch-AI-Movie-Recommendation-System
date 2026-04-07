@@ -516,4 +516,504 @@ BOLLYWOOD.forEach(m => m.mood.forEach(md => {
 }));
 
 function bTopN(arr, n=5) { return [...arr].sort((a,b)=>b.rating-a.rating).slice(0,n); }
+// DASHBOARD ENGINE (using BOLLYWOOD data)
+// ══════════════════════════════════════════════
+const COLORS=['#e8b84b','#ff6b6b','#4ecdc4','#a855f7','#06b6d4','#f97316','#84cc16','#ec4899','#14b8a6','#8b5cf6','#eab308','#ef4444','#22c55e','#3b82f6','#f43f5e','#0ea5e9','#d946ef','#65a30d','#0891b2','#7c3aed'];
+
+let MOVIES = BOLLYWOOD; // Dashboard uses Bollywood catalog
+
+function getAllGenres(){return[...new Set(MOVIES.flatMap(m=>m.genres))].sort();}
+
+function movieCardHTML(m,clickFn='',selected=false){
+  const oc=clickFn?`onclick="${clickFn}(${m.id})"`:'';;
+  return`<div class="movie-card ${selected?'selected':''}" ${oc}>
+    <span class="movie-poster">${m.poster}</span>
+    <div class="movie-title">${m.title}</div>
+    <div class="movie-year">${m.year} · ${m.director.split(' ').slice(-1)[0]}</div>
+    <div class="movie-rating">⭐ ${m.rating}</div>
+    <div class="movie-genres">${m.genres.slice(0,3).map(g=>`<span class="genre-tag">${g}</span>`).join('')}</div>
+  </div>`;}
+
+function topListItemHTML(m,rank){
+  return`<div class="top-list-item" onclick="selectSeedMovie(${m.id});showPage('recommend',document.querySelector('.nav-item:nth-child(3)'))">
+    <div class="top-rank ${rank<=3?'gold':''}">${rank}</div>
+    <div class="top-poster-sm">${m.poster}</div>
+    <div class="top-info"><div class="top-title">${m.title}</div><div class="top-sub">${m.year} · ${m.era}</div></div>
+    <div class="top-rating">⭐ ${m.rating}</div>
+  </div>`;}
+
+function buildGenreChart(){
+  const gc={};MOVIES.forEach(m=>m.genres.forEach(g=>{gc[g]=(gc[g]||0)+1;}));
+  const sorted=Object.entries(gc).sort((a,b)=>b[1]-a[1]).slice(0,12);
+  const mx=sorted[0][1];
+  // Update top genre stat
+  document.getElementById('topGenreStat').textContent=sorted[0][0];
+  document.getElementById('genreChart').innerHTML=sorted.map(([g,c],i)=>
+    `<div class="chart-bar-row"><div class="chart-bar-label">${g}</div><div class="chart-bar-track"><div class="chart-bar-fill" style="width:${c/mx*100}%;background:${COLORS[i%COLORS.length]}"></div></div><div class="chart-bar-val">${c}</div></div>`
+  ).join('');
+}
+
+function buildHallOfFame(){
+  const top=bTopN(MOVIES,10);
+  document.getElementById('hallOfFame').innerHTML=top.map((m,i)=>topListItemHTML(m,i+1)).join('');
+}
+
+function buildDecadeChart(){
+  const eras={};
+  MOVIES.forEach(m=>{
+    if(!eras[m.era])eras[m.era]={sum:0,count:0};
+    eras[m.era].sum+=m.rating;eras[m.era].count++;
+  });
+  const eraOrder=["1940s-50s","1960s-70s","1980s-90s","2000s","2010s","2020s"];
+  const sorted=eraOrder.filter(e=>eras[e]).map(e=>([e,eras[e]]));
+  const maxR=10;
+  // Update avg rating stat
+  const allAvg=(MOVIES.reduce((s,m)=>s+m.rating,0)/MOVIES.length).toFixed(1);
+  document.getElementById('avgRatingStat').textContent=allAvg;
+  document.getElementById('decadeChart').innerHTML=sorted.map(([era,{sum,count}],i)=>{
+    const avg=(sum/count).toFixed(2);
+    const pct=avg/maxR*100;
+    return`<div class="timeline-row"><div class="timeline-year" style="width:80px">${era}</div>
+      <div class="timeline-bar-track"><div class="timeline-bar-fill" style="width:${pct}%;background:${COLORS[i%COLORS.length]}">⭐ ${avg} (${count} films)</div></div></div>`;
+  }).join('');
+}
+
+function buildFeaturedMovies(){
+  const picks=[...MOVIES].sort(()=>0.5-Math.random()).slice(0,8);
+  document.getElementById('featuredMovies').innerHTML=picks.map(m=>movieCardHTML(m,'selectSeedAndNavigate')).join('');
+}
+
+function selectSeedAndNavigate(id){
+  showPage('recommend',document.querySelectorAll('.nav-item')[2]);
+  setTimeout(()=>selectSeedMovie(id),100);
+}
+
+// ── DISCOVER ──
+let activeGenreFilter=null, activeEraFilter=null;
+
+function buildGenreFilters(){
+  const genres=getAllGenres();
+  document.getElementById('genreFilters').innerHTML=
+    `<span style="font-size:11px;color:var(--muted);margin-right:4px;align-self:center">GENRE:</span>`+
+    `<div class="filter-chip active" onclick="setGenreFilter(null,this)">All</div>`+
+    genres.map(g=>`<div class="filter-chip" onclick="setGenreFilter('${g}',this)">${g}</div>`).join('');
+  const eras=["1940s-50s","1960s-70s","1980s-90s","2000s","2010s","2020s"];
+  document.getElementById('eraFilters').innerHTML=
+    `<span style="font-size:11px;color:var(--muted);margin-right:4px;align-self:center">ERA:</span>`+
+    `<div class="filter-chip active" onclick="setEraFilter(null,this)">All</div>`+
+    eras.map(e=>`<div class="filter-chip" onclick="setEraFilter('${e}',this)">${e}</div>`).join('');
+}
+
+function setGenreFilter(genre,el){
+  activeGenreFilter=genre;
+  document.querySelectorAll('#genreFilters .filter-chip').forEach(c=>c.classList.remove('active'));
+  el.classList.add('active');filterMovies();
+}
+function setEraFilter(era,el){
+  activeEraFilter=era;
+  document.querySelectorAll('#eraFilters .filter-chip').forEach(c=>c.classList.remove('active'));
+  el.classList.add('active');filterMovies();
+}
+function filterMovies(){
+  const q=(document.getElementById('discoverSearch').value||'').toLowerCase();
+  let mv=MOVIES;
+  if(activeGenreFilter) mv=mv.filter(m=>m.genres.includes(activeGenreFilter));
+  if(activeEraFilter) mv=mv.filter(m=>m.era===activeEraFilter);
+  if(q) mv=mv.filter(m=>m.title.toLowerCase().includes(q)||m.director.toLowerCase().includes(q)||m.cast.some(c=>c.toLowerCase().includes(q)));
+  document.getElementById('allMoviesGrid').innerHTML=mv.length
+    ?mv.map(m=>movieCardHTML(m,'selectSeedAndNavigate')).join('')
+    :`<div class="empty-state" style="grid-column:1/-1"><span class="emoji">🎭</span><p>No movies found</p></div>`;
+}
+function clearSearch(){document.getElementById('discoverSearch').value='';filterMovies();}
+function buildAllMovies(){filterMovies();}
+
+// ── RECOMMEND ──
+let selectedMovie=null,activeTab='content';
+
+function cosineSim(v1,v2){
+  const k=new Set([...Object.keys(v1),...Object.keys(v2)]);
+  let d=0,m1=0,m2=0;
+  k.forEach(k=>{d+=(v1[k]||0)*(v2[k]||0);m1+=((v1[k]||0)**2);m2+=((v2[k]||0)**2);});
+  return(m1&&m2)?d/(Math.sqrt(m1)*Math.sqrt(m2)):0;
+}
+function getGenreVector(movie){
+  const a=getAllGenres(),v={};
+  a.forEach(g=>v[g]=movie.genres.includes(g)?1:0);
+  v.rating=movie.rating/10;
+  return v;
+}
+function contentBasedRec(movieId,n=6){
+  const t=MOVIES.find(m=>m.id===movieId);
+  if(!t)return[];
+  const tv=getGenreVector(t);
+  const s=MOVIES.filter(m=>m.id!==movieId).map(m=>{
+    const v=getGenreVector(m);
+    const bonus=(m.director===t.director?0.15:0)+(m.era===t.era?0.1:0);
+    return{m,sim:cosineSim(tv,v)+bonus};
+  });
+  s.sort((a,b)=>b.sim-a.sim);
+  return s.slice(0,n).map(x=>x.m);
+}
+function hybridRec(movieId,n=6){
+  const cb=contentBasedRec(movieId,14);
+  const topR=bTopN(MOVIES.filter(m=>m.id!==movieId),14);
+  const seen=new Set(),merged=[];
+  const ml=Math.max(cb.length,topR.length);
+  for(let i=0;i<ml;i++){
+    if(cb[i]&&!seen.has(cb[i].id)){seen.add(cb[i].id);merged.push(cb[i]);}
+    if(topR[i]&&!seen.has(topR[i].id)){seen.add(topR[i].id);merged.push(topR[i]);}
+  }
+  return merged.slice(0,n);
+}
+
+function switchTab(tab,el){activeTab=tab;document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));el.classList.add('active');if(selectedMovie)getRecs();}
+function searchSeedMovies(){
+  const q=document.getElementById('recSearch').value.toLowerCase();
+  if(!q){document.getElementById('seedResults').style.display='none';return;}
+  const m=MOVIES.filter(m=>m.title.toLowerCase().includes(q)||m.director.toLowerCase().includes(q));
+  document.getElementById('seedResults').style.display=m.length?'block':'none';
+  document.getElementById('seedMoviesGrid').innerHTML=m.slice(0,8).map(m=>movieCardHTML(m,'selectSeedMovie',selectedMovie&&selectedMovie.id===m.id)).join('');
+}
+function selectSeedMovie(id){
+  selectedMovie=MOVIES.find(m=>m.id===id);
+  if(!selectedMovie)return;
+  document.getElementById('recSearch').value=selectedMovie.title;
+  document.getElementById('seedResults').style.display='none';
+  const p=document.getElementById('selectedMoviePanel');p.classList.add('visible');
+  document.getElementById('detailPoster').textContent=selectedMovie.poster;
+  document.getElementById('detailTitle').textContent=selectedMovie.title;
+  document.getElementById('detailMeta').textContent=`${selectedMovie.year} · ${selectedMovie.era}`;
+  document.getElementById('detailRating').innerHTML=`⭐ ${selectedMovie.rating}<span class="detail-votes"> IMDb</span>`;
+  document.getElementById('detailDirector').textContent=`🎬 Director: ${selectedMovie.director}`;
+  document.getElementById('detailCast').textContent=`🎭 Cast: ${selectedMovie.cast.join(', ')}`;
+  document.getElementById('detailGenres').innerHTML=selectedMovie.genres.map(g=>`<span class="genre-tag">${g}</span>`).join('');
+  getRecs();
+}
+function getRecs(){
+  if(!selectedMovie){alert('Please select a seed movie first!');return;}
+  let recs,label;
+  if(activeTab==='content'){recs=contentBasedRec(selectedMovie.id);label=`Because you liked "${selectedMovie.title}" — Content-Based`;}
+  else if(activeTab==='collab'){recs=bTopN(MOVIES.filter(m=>m.era===selectedMovie.era&&m.id!==selectedMovie.id),6);label=`More from the ${selectedMovie.era} — Era-Based`;}
+  else{recs=hybridRec(selectedMovie.id);label='Best of both worlds — Hybrid Mix';}
+  document.getElementById('recsSection').style.display='block';
+  document.getElementById('recsSectionTitle').textContent=label;
+  document.getElementById('recsGrid').innerHTML=recs.map(m=>movieCardHTML(m,'selectSeedMovie')).join('');
+}
+
+// ── ANALYTICS ──
+function buildRatingDist(){
+  const b={'<7.0':0,'7.0-7.5':0,'7.5-8.0':0,'8.0-8.5':0,'8.5+':0};
+  MOVIES.forEach(m=>{
+    if(m.rating>=8.5)b['8.5+']++;
+    else if(m.rating>=8.0)b['8.0-8.5']++;
+    else if(m.rating>=7.5)b['7.5-8.0']++;
+    else if(m.rating>=7.0)b['7.0-7.5']++;
+    else b['<7.0']++;
+  });
+  const mx=Math.max(...Object.values(b));
+  document.getElementById('ratingDistChart').innerHTML=Object.entries(b).map(([k,v],i)=>
+    `<div class="chart-bar-row"><div class="chart-bar-label">⭐ ${k}</div><div class="chart-bar-track"><div class="chart-bar-fill" style="width:${v/mx*100}%;background:${COLORS[i]}"></div></div><div class="chart-bar-val">${v}</div></div>`
+  ).join('');
+}
+function buildGenrePerf(){
+  const gr={};MOVIES.forEach(m=>m.genres.forEach(g=>{if(!gr[g])gr[g]=[];gr[g].push(m.rating);}));
+  const avgs=Object.entries(gr).map(([g,rs])=>([g,(rs.reduce((a,b)=>a+b,0)/rs.length).toFixed(2),rs.length])).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  const mx=Math.max(...avgs.map(([,v])=>+v));
+  document.getElementById('genrePerfChart').innerHTML=avgs.map(([g,avg,cnt],i)=>
+    `<div class="chart-bar-row"><div class="chart-bar-label">${g}</div><div class="chart-bar-track"><div class="chart-bar-fill" style="width:${avg/mx*100}%;background:${COLORS[i+4]}"></div></div><div class="chart-bar-val">${avg}</div></div>`
+  ).join('');
+}
+function buildDirectorChart(){
+  const dm={};MOVIES.forEach(m=>{if(!dm[m.director])dm[m.director]={count:0,sumRating:0};dm[m.director].count++;dm[m.director].sumRating+=m.rating;});
+  const dirs=Object.entries(dm).filter(([,d])=>d.count>=2).sort((a,b)=>b[1].count-a[1].count);
+  document.getElementById('directorChart').innerHTML=`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px">`+
+    dirs.map(([name,d],i)=>
+      `<div class="stat-card" style="padding:16px"><div class="stat-label" style="margin-bottom:6px">${name}</div><div style="font-family:'Bebas Neue',sans-serif;font-size:28px;color:${COLORS[i%COLORS.length]}">${d.count} Films</div><div style="font-size:12px;color:var(--muted2);margin-top:4px">Avg ⭐ ${(d.sumRating/d.count).toFixed(2)}</div></div>`
+    ).join('')+`</div>`;
+}
+function buildEraChart(){
+  const eras=["1940s-50s","1960s-70s","1980s-90s","2000s","2010s","2020s"];
+  document.getElementById('eraChart').innerHTML=`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px">`+
+    eras.filter(e=>BERA[e]).map((e,i)=>{
+      const films=BERA[e];
+      const avg=(films.reduce((s,m)=>s+m.rating,0)/films.length).toFixed(2);
+      return`<div class="stat-card" style="padding:16px"><div class="stat-label" style="margin-bottom:6px">${e}</div><div style="font-family:'Bebas Neue',sans-serif;font-size:28px;color:${COLORS[i%COLORS.length]}">${films.length} Films</div><div style="font-size:12px;color:var(--muted2);margin-top:4px">Avg ⭐ ${avg}</div></div>`;
+    }).join('')+`</div>`;
+}
+
+// ── TOP CHARTS ──
+function buildTopCharts(){
+  const all=bTopN(MOVIES,10);
+  const classics=bTopN(MOVIES.filter(m=>m.year<2000),8);
+  const modern=bTopN(MOVIES.filter(m=>m.year>=2010),8);
+  document.getElementById('topByRating').innerHTML=all.map((m,i)=>topListItemHTML(m,i+1)).join('');
+  document.getElementById('topByClassic').innerHTML=classics.map((m,i)=>topListItemHTML(m,i+1)).join('');
+  document.getElementById('topByModern').innerHTML=modern.map((m,i)=>topListItemHTML(m,i+1)).join('');
+}
+
+// ══════════════════════════════════════════════
+// BOLLYWOOD CHATBOT ENGINE
+// ══════════════════════════════════════════════
+const ERA_LABELS = {
+  "1940s-50s":"Golden Era (1940s-50s)",
+  "1960s-70s":"Silver Era (1960s-70s)",
+  "1980s-90s":"Masala Era (1980s-90s)",
+  "2000s":"New Wave (2000s)",
+  "2010s":"Modern Bollywood (2010s)",
+  "2020s":"Contemporary (2020s)",
+};
+
+const GENRE_CHIPS = Object.keys(BGENRE).sort().map(g=>`${g} movies`);
+const ERA_CHIPS = Object.keys(ERA_LABELS).map(e=>`Movies from ${ERA_LABELS[e]}`);
+const ACTOR_CHIPS = ["Shah Rukh Khan films","Aamir Khan films","Amitabh Bachchan films","Salman Khan films","Deepika Padukone films","Alia Bhatt films","Ranveer Singh films","Ranbir Kapoor films","Ayushmann Khurrana films","Vicky Kaushal films","Shahid Kapoor films","Irrfan Khan films"];
+const MOOD_CHIPS = Object.keys(BMOOD).sort().map(md=>`${md.charAt(0).toUpperCase()+md.slice(1)} Bollywood films`);
+const ALL_CHIPS = ["Top rated Bollywood","Underrated gems","Romantic classics","Golden Era films","Best of 2010s","Shah Rukh Khan films","Aamir Khan films","Amitabh Bachchan films","Horror Bollywood","Comedy picks","Inspiring sport films","Surprise me!"];
+
+let currentBotFilter = 'all';
+
+function setBotFilter(type, el) {
+  currentBotFilter = type;
+  document.querySelectorAll('.bot-filter-tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  let chips;
+  if(type==='genre') chips=GENRE_CHIPS.slice(0,20);
+  else if(type==='era') chips=ERA_CHIPS;
+  else if(type==='actor') chips=ACTOR_CHIPS;
+  else if(type==='mood') chips=MOOD_CHIPS.slice(0,18);
+  else chips=ALL_CHIPS;
+  document.getElementById('botChips').innerHTML=chips.map(c=>`<div class="bchip" onclick="bSendChip('${c}')">${c}</div>`).join('');
+}
+
+function bBuildResponse(txt) {
+  const msg = txt.toLowerCase();
+
+  // Greetings
+  if(/^(hi|hey|hello|namaste|namaskar|hola|yo)\b/i.test(txt.trim())) {
+    return {text:"Namaste! 🙏 Ready to dive into 100 films of Bollywood magic? Ask me about any genre, era, actor, or mood — or click the filter tabs above!", cards:null};
+  }
+
+  // Surprise / random
+  if(/surprise|random|anything|kuch bhi/i.test(msg)) {
+    const shuffled=[...BOLLYWOOD].sort(()=>Math.random()-0.5);
+    return {text:"🎲 Here are some randomly picked gems from across all eras!", cards:shuffled.slice(0,5)};
+  }
+
+  // ── ERA matching ──
+  const eraPatterns = [
+    {p:/golden era|1940|1950|1940s|1950s/i, era:"1940s-50s"},
+    {p:/silver era|1960|1970|1960s|1970s/i, era:"1960s-70s"},
+    {p:/1980|1990|1980s|1990s|masala era/i, era:"1980s-90s"},
+    {p:/2000s|early 2000|two thousand/i,    era:"2000s"},
+    {p:/2010s|last decade|modern/i,         era:"2010s"},
+    {p:/2020s|recent|latest|new release/i,  era:"2020s"},
+  ];
+  for(const {p,era} of eraPatterns) {
+    if(p.test(txt)) {
+      const films = BERA[era]||[];
+      return {text:`Here are the best films from the <strong>${ERA_LABELS[era]}</strong> — ${films.length} films in our database! 🎬`, cards:bTopN(films,5)};
+    }
+  }
+
+  // ── ACTOR matching ──
+  const actorPatterns = [
+    {p:/shah rukh|srk|king khan/i, actor:"shah rukh khan"},
+    {p:/aamir khan/i,              actor:"aamir khan"},
+    {p:/salman khan/i,             actor:"salman khan"},
+    {p:/amitabh|big b|bachchan/i,  actor:"amitabh bachchan"},
+    {p:/deepika/i,                 actor:"deepika padukone"},
+    {p:/alia bhatt|alia/i,         actor:"alia bhatt"},
+    {p:/ranveer singh|ranveer/i,   actor:"ranveer singh"},
+    {p:/ranbir kapoor|ranbir/i,    actor:"ranbir kapoor"},
+    {p:/ayushmann/i,               actor:"ayushmann khurrana"},
+    {p:/vicky kaushal/i,           actor:"vicky kaushal"},
+    {p:/shahid kapoor|shahid/i,    actor:"shahid kapoor"},
+    {p:/irrfan khan|irrfan/i,      actor:"irrfan khan"},
+    {p:/manoj bajpayee/i,          actor:"manoj bajpayee"},
+    {p:/nawazuddin/i,              actor:"nawazuddin siddiqui"},
+    {p:/tabu/i,                    actor:"tabu"},
+    {p:/vidya balan/i,             actor:"vidya balan"},
+    {p:/priyanka chopra/i,         actor:"priyanka chopra"},
+    {p:/naseeruddin/i,             actor:"naseeruddin shah"},
+    {p:/rajkummar rao/i,           actor:"rajkummar rao"},
+    {p:/kangana/i,                 actor:"kangana ranaut"},
+    {p:/hrithik/i,                 actor:"hrithik roshan"},
+    {p:/madhuri/i,                 actor:"madhuri dixit"},
+    {p:/kajol/i,                   actor:"kajol"},
+    {p:/kareena/i,                 actor:"kareena kapoor"},
+    {p:/taapsee/i,                 actor:"taapsee pannu"},
+    {p:/sidharth malhotra/i,       actor:"sidharth malhotra"},
+    {p:/anil kapoor/i,             actor:"anil kapoor"},
+  ];
+  for(const {p,actor} of actorPatterns) {
+    if(p.test(txt)) {
+      const films = BACTOR[actor]||[];
+      if(films.length) {
+        const name = actor.split(' ').map(w=>w[0].toUpperCase()+w.slice(1)).join(' ');
+        return {text:`Here are all <strong>${name}</strong> films in our database — a true legend! 🌟`, cards:bTopN(films,5)};
+      }
+    }
+  }
+
+  // ── GENRE matching ──
+  const genrePatterns = [
+    {p:/romantic|romance|love story|love film/i, genre:"Romance"},
+    {p:/\baction\b/i,                            genre:"Action"},
+    {p:/comedy|funny|laugh|comic|humor/i,        genre:"Comedy"},
+    {p:/thriller|suspense/i,                     genre:"Thriller"},
+    {p:/horror|scary|ghost|haunted/i,            genre:"Horror"},
+    {p:/crime|gangster|mafia/i,                  genre:"Crime"},
+    {p:/drama\b/i,                               genre:"Drama"},
+    {p:/biography|biopic|based on true/i,        genre:"Biography"},
+    {p:/history|historical|period/i,             genre:"History"},
+    {p:/sport|sports|cricket|hockey|wrestling|boxing|racing/i, genre:"Sport"},
+    {p:/music|song|singer|musician|band/i,       genre:"Music"},
+    {p:/war\b|battle|military/i,                 genre:"War"},
+    {p:/fantasy|magical|supernatural/i,          genre:"Fantasy"},
+    {p:/family|kids|children/i,                  genre:"Family"},
+    {p:/mystery|whodunit|detective/i,            genre:"Mystery"},
+    {p:/sci.fi|science fiction|future/i,         genre:"Sci-Fi"},
+    {p:/social|society|awareness/i,              genre:"Social"},
+    {p:/satire|satirical/i,                      genre:"Satire"},
+    {p:/adventure|travel|journey/i,              genre:"Adventure"},
+    {p:/spy|espionage|agent/i,                   genre:"Spy"},
+  ];
+  for(const {p,genre} of genrePatterns) {
+    if(p.test(txt)) {
+      const films = BGENRE[genre]||[];
+      return {text:`Best <strong>${genre}</strong> Bollywood films — ${films.length} films found! 🎭`, cards:bTopN(films,5)};
+    }
+  }
+
+  // ── MOOD matching ──
+  const moodPatterns = [
+    {p:/underrated|hidden gem|lesser.known|not popular/i,    mood:"underrated"},
+    {p:/inspiring|motivat|uplifting/i,                       mood:"inspiring"},
+    {p:/feel.good|happy|cheerful|light/i,                    mood:"feel-good"},
+    {p:/dark|dark film|gritty|bleak/i,                       mood:"dark"},
+    {p:/classic|old|vintage|golden|timeless/i,               mood:"classic"},
+    {p:/epic|grand|spectacular|big/i,                        mood:"epic"},
+    {p:/emotional|cry|tear|heartbreak/i,                     mood:"emotional"},
+    {p:/intense|gripping|edge of seat/i,                     mood:"intense"},
+    {p:/patriot|nationalism|india/i,                         mood:"patriotic"},
+    {p:/friend|friendship/i,                                 mood:"friendship"},
+    {p:/thought.provoking|philosophical|deep/i,              mood:"thought-provoking"},
+    {p:/quiet|slow.burn|subtle/i,                            mood:"quiet"},
+    {p:/empowering|feminist|strong woman/i,                  mood:"empowering"},
+    {p:/iconic|legendary|cult/i,                             mood:"iconic"},
+    {p:/horror|scary|atmospheric/i,                          mood:"atmospheric"},
+    {p:/unique|different|unusual/i,                          mood:"unique"},
+    {p:/fun|entertaint|masala|commercial/i,                  mood:"fun"},
+  ];
+  for(const {p,mood} of moodPatterns) {
+    if(p.test(txt)) {
+      const films = BMOOD[mood]||[];
+      return {text:`<strong>${mood.charAt(0).toUpperCase()+mood.slice(1)}</strong> Bollywood films — curated picks! 🎬`, cards:bTopN(films,5)};
+    }
+  }
+
+  // Top rated
+  if(/top|best|highest rated|must watch|greatest|all time/i.test(txt)) {
+    return {text:"The absolute best of Bollywood — highest rated films in our 100-film database! ⭐", cards:bTopN(BOLLYWOOD,5)};
+  }
+
+  // Director query
+  if(/who directed|director of|made by/i.test(txt)) {
+    const found=BOLLYWOOD.find(m=>msg.includes(m.title.toLowerCase().slice(0,8)));
+    if(found) return {text:`<strong>${found.title}</strong> (${found.year}) was directed by <strong>${found.director}</strong>. Era: ${ERA_LABELS[found.era]}. Rated ⭐ ${found.rating} on IMDb.`, cards:null};
+  }
+
+  // Rating query
+  if(/rating|imdb|score|how good/i.test(txt)) {
+    const found=BOLLYWOOD.find(m=>msg.includes(m.title.toLowerCase().slice(0,7)));
+    if(found) return {text:`<strong>${found.title}</strong> has an IMDb rating of <strong>⭐ ${found.rating}</strong>. Directed by ${found.director} in ${found.year} (${found.era}).`, cards:null};
+  }
+
+  // Cast query
+  if(/cast|starring|who.* in|actors in/i.test(txt)) {
+    const found=BOLLYWOOD.find(m=>msg.includes(m.title.toLowerCase().slice(0,7)));
+    if(found) return {text:`<strong>${found.title}</strong> stars: <strong>${found.cast.join(', ')}</strong>. Directed by ${found.director} in ${found.year}.`, cards:null};
+  }
+
+  // How many films in an era
+  if(/how many/i.test(txt)) {
+    const counts=Object.entries(BERA).map(([e,f])=>`${ERA_LABELS[e]||e}: ${f.length} films`).join('<br>');
+    return {text:`Here's our film count by era:<br><br>${counts}`, cards:null};
+  }
+
+  // Default
+  return {
+    text:`I didn't fully catch that — but here are some brilliant picks from across all eras! 🎬 Try using the filter tabs above or ask about a specific genre, actor, or era.`,
+    cards:bTopN([...BOLLYWOOD].sort(()=>Math.random()-0.5).slice(0,10),5),
+  };
+}
+
+function bCardHTML(m) {
+  return `<div class="brec-card" onclick="bSendChip('Tell me about ${m.title.replace(/'/g,"\\'")}')">
+    <div class="brec-poster">${m.poster}</div>
+    <div class="brec-title">${m.title}</div>
+    <div class="brec-meta">${m.year} · ${m.era}</div>
+    <div class="brec-rating">⭐ ${m.rating}</div>
+    <div class="brec-genres">${m.genres.slice(0,2).map(g=>`<span class="brec-genre">${g}</span>`).join('')}</div>
+  </div>`;
+}
+
+function bAddMsg(role,html,cards){
+  const wrap=document.getElementById('chatMessages');
+  const div=document.createElement('div');
+  div.className=`chat-msg ${role}`;
+  const ava=role==='bot'?'🎭':'👤';
+  let inner=`<div class="msg-ava">${ava}</div><div><div class="msg-bbl">${html}</div>`;
+  if(cards&&cards.length) inner+=`<div class="brec-cards">${cards.map(bCardHTML).join('')}</div>`;
+  inner+=`</div>`;
+  div.innerHTML=inner;
+  wrap.appendChild(div);
+  wrap.scrollTop=wrap.scrollHeight;
+}
+
+function bShowTyping(){
+  const wrap=document.getElementById('chatMessages');
+  const div=document.createElement('div');
+  div.className='chat-msg bot typing-row';div.id='bTyping';
+  div.innerHTML=`<div class="msg-ava">🎭</div><div class="typing-bbl"><span></span><span></span><span></span></div>`;
+  wrap.appendChild(div);wrap.scrollTop=wrap.scrollHeight;
+}
+function bHideTyping(){const t=document.getElementById('bTyping');if(t)t.remove();}
+
+function bSendMessage(){
+  const inp=document.getElementById('bChatInput');
+  const btn=document.getElementById('bSendBtn');
+  const text=inp.value.trim();
+  if(!text)return;
+  inp.value='';btn.disabled=true;
+  bAddMsg('user',text,null);
+  bShowTyping();
+  setTimeout(()=>{
+    bHideTyping();
+    const resp=bBuildResponse(text);
+    bAddMsg('bot',resp.text,resp.cards);
+    btn.disabled=false;inp.focus();
+  },550+Math.random()*600);
+}
+function bSendChip(text){document.getElementById('bChatInput').value=text;bSendMessage();}
+
+// ── Navigation ──
+function showPage(id,el){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  document.getElementById('page-'+id).classList.add('active');
+  el.classList.add('active');
+}
+
+// ── Init ──
+document.addEventListener('DOMContentLoaded',()=>{
+  buildGenreChart();buildHallOfFame();buildDecadeChart();buildFeaturedMovies();
+  buildGenreFilters();buildAllMovies();
+  buildRatingDist();buildGenrePerf();buildDirectorChart();buildEraChart();
+  buildTopCharts();
+  // Init chatbot chips
+  setBotFilter('all',document.querySelector('.bot-filter-tab'));
+});
+</script>
+</body>
+</html>
 
