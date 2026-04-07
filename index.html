@@ -1,1 +1,519 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CineMatch — Movie Recommendation Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,700;1,300&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#08090d;--surface:#0f1117;--card:#13161f;--card2:#181c28;
+    --border:rgba(255,255,255,0.07);--accent:#e8b84b;--accent2:#ff6b6b;
+    --accent3:#4ecdc4;--accent4:#a855f7;--text:#f0f0f0;--muted:#6b7280;
+    --muted2:#9ca3af;--glow:0 0 40px rgba(232,184,75,0.15);--bol:#ff6b35;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min-height:100vh;overflow-x:hidden;}
+  body::before{content:'';position:fixed;inset:0;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");pointer-events:none;z-index:0;opacity:0.4;}
+  .app{display:flex;min-height:100vh;position:relative;z-index:1;}
+
+  /* Sidebar */
+  .sidebar{width:240px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:28px 0;position:sticky;top:0;height:100vh;overflow-y:auto;}
+  .logo{padding:0 24px 28px;border-bottom:1px solid var(--border);margin-bottom:20px;}
+  .logo-text{font-family:'Bebas Neue',sans-serif;font-size:32px;letter-spacing:3px;color:var(--accent);line-height:1;}
+  .logo-sub{font-size:11px;color:var(--muted);letter-spacing:2px;text-transform:uppercase;margin-top:4px;}
+  .nav-item{display:flex;align-items:center;gap:12px;padding:12px 24px;cursor:pointer;transition:all 0.2s;border-left:3px solid transparent;font-size:14px;font-weight:500;color:var(--muted2);user-select:none;}
+  .nav-item:hover{color:var(--text);background:rgba(255,255,255,0.04);}
+  .nav-item.active{color:var(--accent);border-left-color:var(--accent);background:rgba(232,184,75,0.06);}
+  .nav-item.bnav.active{color:var(--bol);border-left-color:var(--bol);background:rgba(255,107,53,0.06);}
+  .nav-item.bnav:hover{color:var(--bol);}
+  .nav-icon{font-size:18px;width:20px;text-align:center;}
+  .sidebar-footer{margin-top:auto;padding:20px 24px;border-top:1px solid var(--border);}
+  .user-chip{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--card);border-radius:10px;cursor:pointer;}
+  .user-avatar{width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent4));display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#000;flex-shrink:0;}
+  .user-name{font-size:13px;font-weight:500;}
+  .user-role{font-size:11px;color:var(--muted);}
+
+  /* Main */
+  .main{flex:1;overflow-y:auto;}
+  .page{display:none;padding:36px 40px;animation:fadeIn 0.3s ease;}
+  .page.active{display:block;}
+  .page.chat-page{display:none;flex-direction:column;padding:0;height:100vh;}
+  .page.chat-page.active{display:flex;}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+
+  /* Page header */
+  .page-header{margin-bottom:32px;}
+  .page-title{font-family:'Bebas Neue',sans-serif;font-size:44px;letter-spacing:2px;line-height:1;}
+  .page-title span{color:var(--accent);}
+  .page-sub{color:var(--muted2);font-size:14px;margin-top:6px;font-weight:300;}
+
+  /* Stat cards */
+  .stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:32px;}
+  .stat-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:22px 24px;position:relative;overflow:hidden;transition:transform 0.2s,box-shadow 0.2s;}
+  .stat-card:hover{transform:translateY(-2px);box-shadow:var(--glow);}
+  .stat-card::before{content:'';position:absolute;top:-30px;right:-30px;width:100px;height:100px;border-radius:50%;opacity:0.08;}
+  .stat-card:nth-child(1)::before{background:var(--accent);}
+  .stat-card:nth-child(2)::before{background:var(--accent2);}
+  .stat-card:nth-child(3)::before{background:var(--accent3);}
+  .stat-card:nth-child(4)::before{background:var(--accent4);}
+  .stat-label{font-size:11px;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);margin-bottom:10px;}
+  .stat-value{font-family:'Bebas Neue',sans-serif;font-size:42px;letter-spacing:1px;line-height:1;}
+  .stat-card:nth-child(1) .stat-value{color:var(--accent);}
+  .stat-card:nth-child(2) .stat-value{color:var(--accent2);}
+  .stat-card:nth-child(3) .stat-value{color:var(--accent3);}
+  .stat-card:nth-child(4) .stat-value{color:var(--accent4);}
+  .stat-sub{font-size:12px;color:var(--muted2);margin-top:6px;}
+
+  /* Grids */
+  .two-col{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px;}
+  .three-col{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-bottom:24px;}
+  .section-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:24px;margin-bottom:24px;}
+  .section-card.full{width:100%;}
+  .section-title{font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:1.5px;color:var(--muted2);margin-bottom:18px;display:flex;align-items:center;gap:10px;}
+  .section-title .dot{width:6px;height:6px;border-radius:50%;background:var(--accent);flex-shrink:0;}
+
+  /* Movie cards */
+  .movies-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:16px;}
+  .movie-card{background:var(--card2);border:1px solid var(--border);border-radius:14px;padding:18px 14px;cursor:pointer;transition:all 0.25s;position:relative;overflow:hidden;}
+  .movie-card:hover{transform:translateY(-4px);border-color:rgba(232,184,75,0.3);box-shadow:0 12px 32px rgba(0,0,0,0.4);}
+  .movie-card.selected{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent),var(--glow);}
+  .movie-poster{font-size:42px;margin-bottom:12px;display:block;text-align:center;}
+  .movie-title{font-size:13px;font-weight:600;margin-bottom:4px;line-height:1.3;}
+  .movie-year{font-size:11px;color:var(--muted);margin-bottom:6px;}
+  .movie-rating{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:700;color:var(--accent);background:rgba(232,184,75,0.1);padding:2px 8px;border-radius:20px;}
+  .movie-genres{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px;}
+  .genre-tag{font-size:10px;padding:2px 7px;border-radius:20px;background:rgba(255,255,255,0.06);color:var(--muted2);}
+
+  /* Chart bar */
+  .chart-bar-row{display:flex;align-items:center;gap:10px;margin-bottom:10px;}
+  .chart-bar-label{font-size:12px;color:var(--muted2);width:100px;flex-shrink:0;text-align:right;}
+  .chart-bar-track{flex:1;background:rgba(255,255,255,0.06);border-radius:4px;height:8px;overflow:hidden;}
+  .chart-bar-fill{height:100%;border-radius:4px;transition:width 1s cubic-bezier(0.16,1,0.3,1);}
+  .chart-bar-val{font-size:11px;color:var(--muted);width:32px;}
+
+  /* Recommend */
+  .search-bar{display:flex;gap:12px;margin-bottom:24px;}
+  .search-input{flex:1;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 18px;color:var(--text);font-family:inherit;font-size:14px;outline:none;transition:border-color 0.2s;}
+  .search-input:focus{border-color:var(--accent);}
+  .search-input::placeholder{color:var(--muted);}
+  .btn{background:var(--accent);color:#000;border:none;border-radius:12px;padding:12px 22px;font-family:inherit;font-size:14px;font-weight:700;cursor:pointer;transition:all 0.2s;letter-spacing:0.5px;white-space:nowrap;}
+  .btn:hover{background:#f0c96b;transform:translateY(-1px);}
+  .btn.outline{background:transparent;border:1px solid var(--border);color:var(--text);}
+  .btn.outline:hover{border-color:var(--accent);color:var(--accent);}
+  .filter-row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:24px;}
+  .filter-chip{background:var(--card);border:1px solid var(--border);border-radius:20px;padding:6px 14px;font-size:12px;cursor:pointer;transition:all 0.2s;color:var(--muted2);}
+  .filter-chip:hover,.filter-chip.active{background:rgba(232,184,75,0.12);border-color:var(--accent);color:var(--accent);}
+
+  /* Detail panel */
+  .detail-panel{background:var(--card2);border:1px solid var(--border);border-radius:16px;padding:28px;margin-bottom:24px;display:none;animation:fadeIn 0.3s ease;}
+  .detail-panel.visible{display:flex;gap:24px;}
+  .detail-poster{font-size:80px;flex-shrink:0;text-align:center;width:100px;}
+  .detail-info{flex:1;}
+  .detail-title{font-family:'Bebas Neue',sans-serif;font-size:32px;letter-spacing:1px;margin-bottom:4px;}
+  .detail-meta{color:var(--muted2);font-size:13px;margin-bottom:10px;}
+  .detail-rating{display:inline-flex;align-items:center;gap:6px;background:rgba(232,184,75,0.1);border:1px solid rgba(232,184,75,0.3);padding:4px 14px;border-radius:20px;color:var(--accent);font-weight:700;font-size:16px;margin-bottom:14px;}
+  .detail-votes{font-size:11px;color:var(--muted);margin-left:4px;font-weight:400;}
+  .detail-director,.detail-cast{font-size:13px;color:var(--muted2);margin-bottom:8px;}
+
+  /* Top list */
+  .top-list-item{display:flex;align-items:center;gap:14px;padding:12px 0;border-bottom:1px solid var(--border);cursor:pointer;transition:all 0.2s;}
+  .top-list-item:last-child{border-bottom:none;}
+  .top-list-item:hover{padding-left:6px;}
+  .top-rank{font-family:'Bebas Neue',sans-serif;font-size:22px;color:var(--muted);width:28px;text-align:center;flex-shrink:0;}
+  .top-rank.gold{color:var(--accent);}
+  .top-poster-sm{font-size:26px;flex-shrink:0;}
+  .top-info{flex:1;}
+  .top-title{font-size:13px;font-weight:600;}
+  .top-sub{font-size:11px;color:var(--muted);}
+  .top-rating{font-size:13px;font-weight:700;color:var(--accent);flex-shrink:0;}
+
+  /* Tabs */
+  .tab-row{display:flex;gap:8px;margin-bottom:20px;}
+  .tab{padding:8px 18px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:500;color:var(--muted2);transition:all 0.2s;border:1px solid transparent;}
+  .tab.active{background:rgba(232,184,75,0.1);border-color:rgba(232,184,75,0.3);color:var(--accent);}
+  .tab:hover:not(.active){color:var(--text);background:rgba(255,255,255,0.04);}
+
+  /* Timeline */
+  .timeline-row{display:flex;align-items:center;gap:12px;margin-bottom:12px;}
+  .timeline-year{color:var(--muted);width:40px;font-size:11px;}
+  .timeline-bar-track{flex:1;height:20px;background:rgba(255,255,255,0.04);border-radius:4px;overflow:hidden;}
+  .timeline-bar-fill{height:100%;border-radius:4px;display:flex;align-items:center;padding:0 8px;font-size:10px;font-weight:600;color:rgba(0,0,0,0.8);}
+
+  /* Empty */
+  .empty-state{text-align:center;padding:40px;color:var(--muted2);}
+  .empty-state .emoji{font-size:48px;margin-bottom:12px;display:block;}
+
+  ::-webkit-scrollbar{width:6px;}
+  ::-webkit-scrollbar-track{background:transparent;}
+  ::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.1);border-radius:3px;}
+
+  /* ═══ BOLLYWOOD CHATBOT ═══ */
+  .chat-header{padding:18px 28px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:14px;flex-shrink:0;background:var(--surface);}
+  .chat-bot-avatar{width:46px;height:46px;border-radius:14px;background:linear-gradient(135deg,#ff6b35,var(--accent));display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0;box-shadow:0 0 20px rgba(255,107,53,0.3);}
+  .chat-title{font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:2px;line-height:1.1;}
+  .chat-title span{color:var(--bol);}
+  .chat-sub-row{display:flex;align-items:center;gap:8px;margin-top:3px;}
+  .status-dot{width:7px;height:7px;border-radius:50%;background:var(--accent3);display:inline-block;animation:sPulse 2s infinite;}
+  @keyframes sPulse{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(78,205,196,0.4)}50%{opacity:0.6;box-shadow:0 0 0 4px rgba(78,205,196,0)}}
+  .chat-sub{font-size:11px;color:var(--muted2);}
+
+  /* Genre / Era filter strips */
+  .bot-filter-bar{padding:8px 28px;border-bottom:1px solid var(--border);display:flex;gap:0;flex-shrink:0;background:var(--surface);}
+  .bot-filter-tab{padding:7px 16px;font-size:12px;font-weight:600;cursor:pointer;color:var(--muted2);border-bottom:2px solid transparent;transition:all 0.2s;user-select:none;white-space:nowrap;}
+  .bot-filter-tab.active{color:var(--bol);border-bottom-color:var(--bol);}
+  .bot-filter-tab:hover:not(.active){color:var(--text);}
+
+  .chips-bar{padding:8px 28px;border-bottom:1px solid var(--border);display:flex;gap:7px;flex-wrap:wrap;flex-shrink:0;background:var(--surface);max-height:90px;overflow-y:auto;}
+  .bchip{background:var(--card);border:1px solid var(--border);border-radius:20px;padding:4px 12px;font-size:11px;color:var(--muted2);cursor:pointer;transition:all 0.2s;white-space:nowrap;}
+  .bchip:hover{border-color:var(--bol);color:var(--bol);background:rgba(255,107,53,0.08);}
+
+  /* Messages */
+  .chat-messages{flex:1;overflow-y:auto;padding:18px 28px;display:flex;flex-direction:column;gap:14px;}
+  .chat-msg{display:flex;gap:10px;max-width:84%;animation:msgIn 0.3s ease;}
+  @keyframes msgIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+  .chat-msg.user{align-self:flex-end;flex-direction:row-reverse;}
+  .msg-ava{width:34px;height:34px;border-radius:10px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:17px;}
+  .chat-msg.bot .msg-ava{background:linear-gradient(135deg,#ff6b35,var(--accent));}
+  .chat-msg.user .msg-ava{background:linear-gradient(135deg,var(--accent4),#7c3aed);}
+  .msg-bbl{padding:11px 15px;border-radius:16px;font-size:13.5px;line-height:1.65;max-width:100%;}
+  .chat-msg.bot .msg-bbl{background:var(--card2);border:1px solid var(--border);border-top-left-radius:4px;color:var(--text);}
+  .chat-msg.user .msg-bbl{background:linear-gradient(135deg,rgba(232,184,75,0.18),rgba(232,184,75,0.07));border:1px solid rgba(232,184,75,0.25);border-top-right-radius:4px;}
+
+  /* Bollywood rec cards */
+  .brec-cards{display:flex;gap:9px;flex-wrap:wrap;margin-top:10px;}
+  .brec-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 13px;width:164px;cursor:pointer;transition:all 0.25s;}
+  .brec-card:hover{border-color:rgba(255,107,53,0.45);transform:translateY(-3px);box-shadow:0 10px 28px rgba(0,0,0,0.4);}
+  .brec-poster{font-size:28px;margin-bottom:7px;}
+  .brec-title{font-size:12px;font-weight:700;margin-bottom:3px;line-height:1.3;}
+  .brec-meta{font-size:10px;color:var(--muted);}
+  .brec-rating{font-size:11px;color:var(--accent);font-weight:700;margin-top:4px;}
+  .brec-genres{display:flex;flex-wrap:wrap;gap:3px;margin-top:5px;}
+  .brec-genre{font-size:9px;padding:2px 6px;border-radius:10px;background:rgba(255,107,53,0.1);color:#ff8c5a;}
+
+  /* Typing */
+  .typing-row{display:flex;gap:10px;}
+  .typing-bbl{display:flex;align-items:center;gap:5px;padding:12px 16px;background:var(--card2);border:1px solid var(--border);border-radius:16px;border-top-left-radius:4px;}
+  .typing-bbl span{width:6px;height:6px;border-radius:50%;background:var(--muted);animation:tdot 1.2s infinite;}
+  .typing-bbl span:nth-child(2){animation-delay:0.2s;}
+  .typing-bbl span:nth-child(3){animation-delay:0.4s;}
+  @keyframes tdot{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-6px)}}
+
+  /* Input */
+  .chat-input-bar{padding:12px 28px 16px;border-top:1px solid var(--border);display:flex;gap:10px;flex-shrink:0;background:var(--surface);}
+  .chat-inp{flex:1;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:11px 16px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:13.5px;outline:none;transition:border-color 0.2s;}
+  .chat-inp:focus{border-color:var(--bol);}
+  .chat-inp::placeholder{color:var(--muted);}
+  .chat-send{background:linear-gradient(135deg,#ff6b35,var(--accent));color:#000;border:none;border-radius:12px;padding:11px 22px;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:700;cursor:pointer;transition:all 0.2s;white-space:nowrap;}
+  .chat-send:hover{opacity:0.9;transform:translateY(-1px);}
+  .chat-send:disabled{opacity:0.4;cursor:not-allowed;transform:none;}
+
+  @media(max-width:900px){
+    .stats-grid{grid-template-columns:1fr 1fr;}
+    .two-col,.three-col{grid-template-columns:1fr;}
+    .sidebar{width:60px;}
+    .nav-label,.logo-sub,.logo-text,.user-name,.user-role{display:none;}
+    .logo{padding:0 0 20px;text-align:center;}
+    .user-chip{justify-content:center;}
+    .page{padding:24px 20px;}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <nav class="sidebar">
+    <div class="logo">
+      <div class="logo-text">CineMatch</div>
+      <div class="logo-sub">AI · Recommendations</div>
+    </div>
+    <div class="nav-item active" onclick="showPage('dashboard',this)"><span class="nav-icon">📊</span><span class="nav-label">Dashboard</span></div>
+    <div class="nav-item" onclick="showPage('discover',this)"><span class="nav-icon">🎬</span><span class="nav-label">Discover</span></div>
+    <div class="nav-item" onclick="showPage('recommend',this)"><span class="nav-icon">✨</span><span class="nav-label">Recommend</span></div>
+    <div class="nav-item" onclick="showPage('analytics',this)"><span class="nav-icon">📈</span><span class="nav-label">Analytics</span></div>
+    <div class="nav-item" onclick="showPage('topcharts',this)"><span class="nav-icon">🏆</span><span class="nav-label">Top Charts</span></div>
+    <div class="nav-item bnav" onclick="showPage('bollywood',this)"><span class="nav-icon">🎭</span><span class="nav-label">Bollywood Bot</span></div>
+    <div class="sidebar-footer">
+      <div class="user-chip">
+        <div class="user-avatar">D</div>
+        <div><div class="user-name">Demo User</div><div class="user-role">Cinephile</div></div>
+      </div>
+    </div>
+  </nav>
+
+  <main class="main">
+    <!-- DASHBOARD -->
+    <div class="page active" id="page-dashboard">
+      <div class="page-header">
+        <div class="page-title">CINE<span>MATCH</span> DASHBOARD</div>
+        <div class="page-sub">Your personalized movie intelligence platform — now with 100 Bollywood films</div>
+      </div>
+      <div class="stats-grid">
+        <div class="stat-card"><div class="stat-label">Bollywood Films</div><div class="stat-value">100</div><div class="stat-sub">in the catalog</div></div>
+        <div class="stat-card"><div class="stat-label">Avg Rating</div><div class="stat-value" id="avgRatingStat">8.0</div><div class="stat-sub">⭐ IMDb weighted</div></div>
+        <div class="stat-card"><div class="stat-label">Eras Covered</div><div class="stat-value">7</div><div class="stat-sub">1940s → 2020s</div></div>
+        <div class="stat-card"><div class="stat-label">Top Genre</div><div class="stat-value" id="topGenreStat" style="font-size:24px">Drama</div><div class="stat-sub">most represented</div></div>
+      </div>
+      <div class="two-col">
+        <div class="section-card"><div class="section-title"><span class="dot"></span>Genre Distribution</div><div id="genreChart"></div></div>
+        <div class="section-card"><div class="section-title"><span class="dot"></span>Hall of Fame</div><div id="hallOfFame"></div></div>
+      </div>
+      <div class="section-card full"><div class="section-title"><span class="dot"></span>Average Rating by Era</div><div id="decadeChart"></div></div>
+      <div class="section-card full"><div class="section-title"><span class="dot"></span>Featured Picks</div><div class="movies-grid" id="featuredMovies"></div></div>
+    </div>
+
+    <!-- DISCOVER -->
+    <div class="page" id="page-discover">
+      <div class="page-header"><div class="page-title">DISCOVER <span>MOVIES</span></div><div class="page-sub">Browse all 100 Bollywood films — filter by genre or era</div></div>
+      <div class="search-bar">
+        <input type="text" class="search-input" id="discoverSearch" placeholder="Search movies, directors, cast…" oninput="filterMovies()">
+        <button class="btn outline" onclick="clearSearch()">Clear</button>
+      </div>
+      <div class="filter-row" id="genreFilters"></div>
+      <div class="filter-row" id="eraFilters"></div>
+      <div class="section-card full"><div class="movies-grid" id="allMoviesGrid"></div></div>
+    </div>
+
+    <!-- RECOMMEND -->
+    <div class="page" id="page-recommend">
+      <div class="page-header"><div class="page-title">GET <span>RECOMMENDATIONS</span></div><div class="page-sub">Pick a Bollywood film, get AI-powered suggestions</div></div>
+      <div class="tab-row">
+        <div class="tab active" onclick="switchTab('content',this)">🎭 Content-Based</div>
+        <div class="tab" onclick="switchTab('collab',this)">👥 Collaborative</div>
+        <div class="tab" onclick="switchTab('hybrid',this)">⚡ Hybrid Mix</div>
+      </div>
+      <div class="search-bar">
+        <input type="text" class="search-input" id="recSearch" placeholder="Pick a seed movie…" oninput="searchSeedMovies()">
+        <button class="btn" onclick="getRecs()">✨ Get Recommendations</button>
+      </div>
+      <div id="seedResults" style="margin-bottom:16px;display:none"><div class="movies-grid" id="seedMoviesGrid"></div></div>
+      <div class="detail-panel" id="selectedMoviePanel">
+        <div class="detail-poster" id="detailPoster"></div>
+        <div class="detail-info">
+          <div class="detail-title" id="detailTitle"></div>
+          <div class="detail-meta" id="detailMeta"></div>
+          <div class="detail-rating" id="detailRating"></div>
+          <div class="detail-director" id="detailDirector"></div>
+          <div class="detail-cast" id="detailCast"></div>
+          <div class="movie-genres" id="detailGenres"></div>
+        </div>
+      </div>
+      <div id="recsSection" style="display:none">
+        <div class="section-card full">
+          <div class="section-title"><span class="dot"></span><span id="recsSectionTitle">Recommendations</span></div>
+          <div class="movies-grid" id="recsGrid"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ANALYTICS -->
+    <div class="page" id="page-analytics">
+      <div class="page-header"><div class="page-title">ANALYTICS <span>&amp; INSIGHTS</span></div><div class="page-sub">Deep dive into 100 films of Hindi cinema</div></div>
+      <div class="two-col">
+        <div class="section-card"><div class="section-title"><span class="dot"></span>Rating Distribution</div><div id="ratingDistChart"></div></div>
+        <div class="section-card"><div class="section-title"><span class="dot"></span>Genre Performance</div><div id="genrePerfChart"></div></div>
+      </div>
+      <div class="section-card full"><div class="section-title"><span class="dot"></span>Director Spotlight</div><div id="directorChart"></div></div>
+      <div class="section-card full"><div class="section-title"><span class="dot"></span>Era Analysis</div><div id="eraChart"></div></div>
+    </div>
+
+    <!-- TOP CHARTS -->
+    <div class="page" id="page-topcharts">
+      <div class="page-header"><div class="page-title">TOP <span>CHARTS</span></div><div class="page-sub">Rankings across 100 Bollywood masterpieces</div></div>
+      <div class="three-col">
+        <div class="section-card"><div class="section-title"><span class="dot"></span>🏆 Highest Rated</div><div id="topByRating"></div></div>
+        <div class="section-card"><div class="section-title"><span class="dot"></span>🕰️ All-Time Classics</div><div id="topByClassic"></div></div>
+        <div class="section-card"><div class="section-title"><span class="dot"></span>🆕 Modern Hits</div><div id="topByModern"></div></div>
+      </div>
+    </div>
+
+    <!-- BOLLYWOOD CHATBOT -->
+    <div class="page chat-page" id="page-bollywood">
+      <div class="chat-header">
+        <div class="chat-bot-avatar">🎭</div>
+        <div>
+          <div class="chat-title">BOLLYWOOD <span>CHATBOT</span></div>
+          <div class="chat-sub-row">
+            <span class="status-dot"></span>
+            <span class="chat-sub">100 films · All genres · All eras · 1940s to 2020s</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Filter tabs: Genre / Era -->
+      <div class="bot-filter-bar">
+        <div class="bot-filter-tab active" onclick="setBotFilter('all',this)">All Picks</div>
+        <div class="bot-filter-tab" onclick="setBotFilter('genre',this)">By Genre</div>
+        <div class="bot-filter-tab" onclick="setBotFilter('era',this)">By Era</div>
+        <div class="bot-filter-tab" onclick="setBotFilter('actor',this)">By Actor</div>
+        <div class="bot-filter-tab" onclick="setBotFilter('mood',this)">By Mood</div>
+      </div>
+
+      <!-- Quick chips (change based on filter) -->
+      <div class="chips-bar" id="botChips"></div>
+
+      <!-- Messages -->
+      <div class="chat-messages" id="chatMessages">
+        <div class="chat-msg bot">
+          <div class="msg-ava">🎭</div>
+          <div>
+            <div class="msg-bbl">
+              <strong>Namaste! 🙏</strong> I'm your Bollywood Chatbot with a database of <strong>100 Hindi films</strong> spanning <strong>8 decades</strong> — from 1940s golden era to 2020s blockbusters!<br><br>
+              🎬 <strong>By Genre</strong> — Romance, Action, Thriller, Comedy, Horror, Drama, Crime, Biography, Fantasy, War, Sci-Fi, Music, Sport, History, Family, Mystery, Animation<br>
+              🕰️ <strong>By Era</strong> — Golden Era (1940-60), 1960s-70s, 1980s-90s, 2000s, 2010s, 2020s<br>
+              🎭 <strong>By Actor</strong> — SRK, Aamir, Salman, Amitabh, Deepika, Alia, Ranveer and more<br>
+              🌟 <strong>By Mood</strong> — inspiring, feel-good, dark, romantic, underrated, classic, epic<br><br>
+              <em>Use the tabs above or just type your question!</em>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="chat-input-bar">
+        <input class="chat-inp" id="bChatInput" placeholder="Ask about any Bollywood movie, actor, genre, or era…" onkeydown="if(event.key==='Enter')bSendMessage()">
+        <button class="chat-send" id="bSendBtn" onclick="bSendMessage()">Send 🎬</button>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════════════════
+// 100 BOLLYWOOD MOVIES DATABASE
+// ══════════════════════════════════════════════════════════════════
+const BOLLYWOOD = [
+  // ── GOLDEN ERA (1940s–1950s) ──
+  {id:1,  title:"Awaara",                         year:1951, rating:7.9, genres:["Drama","Romance"],              director:"Raj Kapoor",              cast:["Raj Kapoor","Nargis"],                        poster:"🎪", mood:["classic","romantic"],               era:"1940s-50s"},
+  {id:2,  title:"Do Bigha Zamin",                 year:1953, rating:7.8, genres:["Drama","Social"],               director:"Bimal Roy",                cast:["Balraj Sahni","Nirupa Roy"],                  poster:"🌾", mood:["classic","emotional","social"],     era:"1940s-50s"},
+  {id:3,  title:"Devdas",                         year:1955, rating:7.9, genres:["Drama","Romance","Tragedy"],    director:"Bimal Roy",                cast:["Dilip Kumar","Suchitra Sen"],                 poster:"🥃", mood:["classic","romantic","tragic"],      era:"1940s-50s"},
+  {id:4,  title:"Mother India",                   year:1957, rating:8.1, genres:["Drama","Social","Epic"],        director:"Mehboob Khan",             cast:["Nargis","Sunil Dutt"],                        poster:"🌻", mood:["classic","epic","social"],          era:"1940s-50s"},
+  {id:5,  title:"Pyaasa",                         year:1957, rating:8.3, genres:["Drama","Romance","Poetry"],     director:"Guru Dutt",                cast:["Guru Dutt","Waheeda Rehman"],                 poster:"🪔", mood:["classic","emotional","poetic"],     era:"1940s-50s"},
+  {id:6,  title:"Kaagaz Ke Phool",               year:1959, rating:8.0, genres:["Drama","Romance"],              director:"Guru Dutt",                cast:["Guru Dutt","Waheeda Rehman"],                 poster:"🌸", mood:["classic","tragic"],                 era:"1940s-50s"},
+  {id:7,  title:"Mughal-E-Azam",                 year:1960, rating:8.2, genres:["Drama","History","Romance"],    director:"K. Asif",                  cast:["Dilip Kumar","Madhubala","Prithviraj Kapoor"], poster:"🏰", mood:["classic","epic","romantic"],        era:"1960s-70s"},
+  // ── 1960s-70s ──
+  {id:8,  title:"Guide",                          year:1965, rating:8.0, genres:["Drama","Romance","Spiritual"],  director:"Vijay Anand",              cast:["Dev Anand","Waheeda Rehman"],                 poster:"🗺️", mood:["classic","romantic","philosophical"],era:"1960s-70s"},
+  {id:9,  title:"Anand",                          year:1971, rating:8.2, genres:["Drama","Tragedy"],              director:"Hrishikesh Mukherjee",     cast:["Rajesh Khanna","Amitabh Bachchan"],           poster:"😊", mood:["classic","emotional","inspiring"],  era:"1960s-70s"},
+  {id:10, title:"Sholay",                         year:1975, rating:8.2, genres:["Action","Adventure","Drama"],   director:"Ramesh Sippy",             cast:["Amitabh Bachchan","Dharmendra","Hema Malini"],poster:"🤠", mood:["classic","action","iconic"],        era:"1960s-70s"},
+  {id:11, title:"Deewar",                         year:1975, rating:8.1, genres:["Crime","Drama","Action"],       director:"Yash Chopra",              cast:["Amitabh Bachchan","Shashi Kapoor"],           poster:"🏗️", mood:["classic","intense","iconic"],       era:"1960s-70s"},
+  {id:12, title:"Mugaddar Ka Sikandar",           year:1978, rating:7.9, genres:["Drama","Romance","Action"],     director:"Prakash Mehra",            cast:["Amitabh Bachchan","Raakhee"],                 poster:"👑", mood:["classic","romantic","tragic"],      era:"1960s-70s"},
+  {id:13, title:"Gol Maal",                       year:1979, rating:8.2, genres:["Comedy"],                      director:"Hrishikesh Mukherjee",     cast:["Amol Palekar","Utpal Dutt"],                  poster:"😂", mood:["classic","comedy","feel-good"],     era:"1960s-70s"},
+  // ── 1980s-90s ──
+  {id:14, title:"Masoom",                         year:1983, rating:8.3, genres:["Drama","Family"],               director:"Shekhar Kapur",            cast:["Naseeruddin Shah","Shabana Azmi"],            poster:"🧒", mood:["emotional","family","underrated"],  era:"1980s-90s"},
+  {id:15, title:"Jaane Bhi Do Yaaron",            year:1983, rating:8.4, genres:["Comedy","Satire","Thriller"],   director:"Kundan Shah",              cast:["Naseeruddin Shah","Ravi Baswani"],            poster:"📷", mood:["comedy","dark","underrated","classic"],era:"1980s-90s"},
+  {id:16, title:"Tezaab",                         year:1988, rating:7.2, genres:["Action","Romance","Drama"],     director:"N. Chandra",               cast:["Anil Kapoor","Madhuri Dixit"],                poster:"🔥", mood:["action","romantic"],                era:"1980s-90s"},
+  {id:17, title:"Qayamat Se Qayamat Tak",        year:1988, rating:7.8, genres:["Romance","Drama","Tragedy"],    director:"Mansoor Khan",             cast:["Aamir Khan","Juhi Chawla"],                   poster:"❤️", mood:["romantic","tragic","classic"],      era:"1980s-90s"},
+  {id:18, title:"Maine Pyar Kiya",                year:1989, rating:7.3, genres:["Romance","Drama"],              director:"Sooraj Barjatya",          cast:["Salman Khan","Bhagyashree"],                  poster:"🕊️", mood:["romantic","classic","feel-good"],   era:"1980s-90s"},
+  {id:19, title:"Dil",                            year:1990, rating:7.2, genres:["Romance","Comedy","Drama"],     director:"Indra Kumar",              cast:["Aamir Khan","Madhuri Dixit"],                 poster:"💕", mood:["romantic","feel-good"],             era:"1980s-90s"},
+  {id:20, title:"Jo Jeeta Wohi Sikandar",        year:1992, rating:8.0, genres:["Sport","Drama","Romance"],      director:"Mansoor Khan",             cast:["Aamir Khan","Ayesha Jhulka"],                 poster:"🚴", mood:["inspiring","sport","feel-good"],    era:"1980s-90s"},
+  {id:21, title:"Hum Hain Rahi Pyar Ke",        year:1993, rating:7.8, genres:["Comedy","Romance","Drama"],     director:"Mahesh Bhatt",             cast:["Aamir Khan","Juhi Chawla"],                   poster:"🏠", mood:["feel-good","romantic","comedy"],    era:"1980s-90s"},
+  {id:22, title:"1942: A Love Story",            year:1994, rating:7.8, genres:["Romance","Drama","History"],    director:"Vidhu Vinod Chopra",       cast:["Anil Kapoor","Manisha Koirala"],              poster:"🌹", mood:["romantic","patriotic","classic"],   era:"1980s-90s"},
+  {id:23, title:"Hum Aapke Hain Koun",           year:1994, rating:7.5, genres:["Romance","Drama","Family"],     director:"Sooraj Barjatya",          cast:["Salman Khan","Madhuri Dixit"],                poster:"🎊", mood:["family","feel-good","romantic"],    era:"1980s-90s"},
+  {id:24, title:"Dilwale Dulhania Le Jayenge",    year:1995, rating:8.1, genres:["Romance","Drama"],              director:"Aditya Chopra",            cast:["Shah Rukh Khan","Kajol"],                     poster:"🚂", mood:["romantic","classic","feel-good"],   era:"1980s-90s"},
+  {id:25, title:"Rangeela",                       year:1995, rating:7.6, genres:["Romance","Drama","Music"],      director:"Ram Gopal Varma",          cast:["Aamir Khan","Urmila Matondkar"],              poster:"🎨", mood:["romantic","music","feel-good"],     era:"1980s-90s"},
+  {id:26, title:"Kuch Kuch Hota Hai",            year:1998, rating:7.5, genres:["Romance","Drama","Comedy"],     director:"Karan Johar",              cast:["Shah Rukh Khan","Kajol","Rani Mukerji"],       poster:"💔", mood:["romantic","classic","feel-good"],   era:"1980s-90s"},
+  {id:27, title:"Satya",                          year:1998, rating:8.2, genres:["Crime","Drama","Thriller"],    director:"Ram Gopal Varma",          cast:["Manoj Bajpayee","Urmila Matondkar"],          poster:"🗡️", mood:["dark","intense","gangster","classic"],era:"1980s-90s"},
+  {id:28, title:"Dil Se",                        year:1998, rating:7.7, genres:["Romance","Thriller","Drama"],   director:"Mani Ratnam",              cast:["Shah Rukh Khan","Manisha Koirala"],           poster:"💣", mood:["intense","romantic","dark"],        era:"1980s-90s"},
+  {id:29, title:"Kaho Naa Pyaar Hai",            year:2000, rating:7.2, genres:["Romance","Thriller","Drama"],   director:"Rakesh Roshan",            cast:["Hrithik Roshan","Ameesha Patel"],             poster:"💎", mood:["romantic","feel-good"],             era:"2000s"},
+  // ── 2000s ──
+  {id:30, title:"Lagaan",                         year:2001, rating:8.1, genres:["Drama","Sport","History"],      director:"Ashutosh Gowariker",       cast:["Aamir Khan","Gracy Singh"],                   poster:"🏏", mood:["inspiring","classic","epic"],       era:"2000s"},
+  {id:31, title:"Dil Chahta Hai",                 year:2001, rating:8.1, genres:["Comedy","Drama","Romance"],     director:"Farhan Akhtar",            cast:["Aamir Khan","Saif Ali Khan","Akshaye Khanna"],poster:"🌊", mood:["feel-good","friendship","classic"],  era:"2000s"},
+  {id:32, title:"Kabhi Khushi Kabhie Gham",       year:2001, rating:7.4, genres:["Romance","Drama","Family"],     director:"Karan Johar",              cast:["Shah Rukh Khan","Amitabh Bachchan","Kajol"],   poster:"🏛️", mood:["family","classic","dramatic"],      era:"2000s"},
+  {id:33, title:"Devdas (2002)",                  year:2002, rating:7.5, genres:["Drama","Romance","Tragedy"],    director:"Sanjay Leela Bhansali",    cast:["Shah Rukh Khan","Aishwarya Rai","Madhuri Dixit"],poster:"🥀",mood:["romantic","tragic","visually stunning"],era:"2000s"},
+  {id:34, title:"Company",                        year:2002, rating:8.0, genres:["Crime","Drama","Thriller"],     director:"Ram Gopal Varma",          cast:["Ajay Devgn","Vivek Oberoi"],                  poster:"💼", mood:["dark","intense","gangster"],        era:"2000s"},
+  {id:35, title:"Kal Ho Naa Ho",                  year:2003, rating:7.8, genres:["Romance","Drama","Comedy"],     director:"Nikhil Advani",            cast:["Shah Rukh Khan","Preity Zinta","Saif Ali Khan"],poster:"🌅",mood:["romantic","emotional","feel-good"], era:"2000s"},
+  {id:36, title:"Munnabhai MBBS",                 year:2003, rating:8.1, genres:["Comedy","Drama"],               director:"Rajkumar Hirani",          cast:["Sanjay Dutt","Arshad Warsi"],                 poster:"🩺", mood:["comedy","feel-good","inspiring"],   era:"2000s"},
+  {id:37, title:"Swades",                         year:2004, rating:8.2, genres:["Drama","Social"],               director:"Ashutosh Gowariker",       cast:["Shah Rukh Khan","Gayatri Joshi"],             poster:"🏞️", mood:["inspiring","patriotic","underrated"],era:"2000s"},
+  {id:38, title:"Black",                          year:2005, rating:8.2, genres:["Drama","Biography"],            director:"Sanjay Leela Bhansali",    cast:["Amitabh Bachchan","Rani Mukerji"],            poster:"⚫", mood:["inspiring","emotional","visually stunning"],era:"2000s"},
+  {id:39, title:"Rang De Basanti",                year:2006, rating:8.2, genres:["Drama","History","Action"],     director:"Rakeysh Omprakash Mehra",  cast:["Aamir Khan","Siddharth"],                     poster:"🌿", mood:["inspiring","patriotic","intense"],  era:"2000s"},
+  {id:40, title:"Lage Raho Munna Bhai",           year:2006, rating:8.1, genres:["Comedy","Drama"],               director:"Rajkumar Hirani",          cast:["Sanjay Dutt","Arshad Warsi"],                 poster:"🕊️", mood:["comedy","feel-good","inspiring"],   era:"2000s"},
+  {id:41, title:"Dhoom 2",                        year:2006, rating:6.9, genres:["Action","Thriller","Crime"],    director:"Sanjay Gadhvi",            cast:["Hrithik Roshan","Abhishek Bachchan"],         poster:"🏍️", mood:["action","fun"],                     era:"2000s"},
+  {id:42, title:"Chak De! India",                 year:2007, rating:8.2, genres:["Drama","Sport"],                director:"Shimit Amin",              cast:["Shah Rukh Khan","Vidya Balan"],               poster:"🏑", mood:["inspiring","sport","patriotic"],    era:"2000s"},
+  {id:43, title:"Taare Zameen Par",               year:2007, rating:8.4, genres:["Drama","Family"],               director:"Aamir Khan",               cast:["Darsheel Safary","Aamir Khan"],               poster:"⭐", mood:["emotional","inspiring","family"],   era:"2000s"},
+  {id:44, title:"Om Shanti Om",                   year:2007, rating:7.2, genres:["Romance","Drama","Comedy"],     director:"Farah Khan",               cast:["Shah Rukh Khan","Deepika Padukone"],          poster:"🎬", mood:["fun","romantic","feel-good"],       era:"2000s"},
+  {id:45, title:"Jab We Met",                     year:2007, rating:7.9, genres:["Romance","Comedy","Drama"],     director:"Imtiaz Ali",               cast:["Shahid Kapoor","Kareena Kapoor"],             poster:"🚃", mood:["romantic","feel-good","comedy"],    era:"2000s"},
+  {id:46, title:"A Wednesday",                    year:2008, rating:8.2, genres:["Thriller","Drama"],             director:"Neeraj Pandey",            cast:["Naseeruddin Shah","Anupam Kher"],             poster:"💣", mood:["thriller","intense","underrated"],  era:"2000s"},
+  {id:47, title:"Fashion",                        year:2008, rating:7.3, genres:["Drama","Biography"],            director:"Madhur Bhandarkar",        cast:["Priyanka Chopra","Kangana Ranaut"],           poster:"👗", mood:["inspiring","dark","dramatic"],      era:"2000s"},
+  {id:48, title:"3 Idiots",                       year:2009, rating:8.4, genres:["Comedy","Drama"],               director:"Rajkumar Hirani",          cast:["Aamir Khan","R. Madhavan","Sharman Joshi"],  poster:"🎓", mood:["comedy","inspiring","feel-good"],   era:"2000s"},
+  {id:49, title:"Dev.D",                          year:2009, rating:7.8, genres:["Drama","Romance","Satire"],     director:"Anurag Kashyap",           cast:["Abhay Deol","Mahi Gill"],                    poster:"🎸", mood:["dark","unique","underrated"],       era:"2000s"},
+  {id:50, title:"Kaminey",                        year:2009, rating:7.6, genres:["Crime","Thriller","Action"],    director:"Vishal Bhardwaj",          cast:["Shahid Kapoor","Priyanka Chopra"],           poster:"🎭", mood:["dark","thriller","unique"],         era:"2000s"},
+  // ── 2010s ──
+  {id:51, title:"Udaan",                          year:2010, rating:8.3, genres:["Drama","Coming-of-Age"],        director:"Vikramaditya Motwane",     cast:["Rajat Barmecha","Ronit Roy"],                 poster:"🦅", mood:["inspiring","emotional","underrated"],era:"2010s"},
+  {id:52, title:"Zindagi Na Milegi Dobara",        year:2011, rating:8.2, genres:["Comedy","Drama","Adventure"],   director:"Zoya Akhtar",              cast:["Hrithik Roshan","Farhan Akhtar","Abhay Deol"],poster:"🚗", mood:["feel-good","travel","friendship"],  era:"2010s"},
+  {id:53, title:"Rockstar",                        year:2011, rating:7.9, genres:["Romance","Drama","Music"],      director:"Imtiaz Ali",               cast:["Ranbir Kapoor","Nargis Fakhri"],              poster:"🎸", mood:["music","intense","romantic"],       era:"2010s"},
+  {id:54, title:"The Dirty Picture",              year:2011, rating:7.3, genres:["Drama","Biography"],            director:"Milan Luthria",            cast:["Vidya Balan","Emraan Hashmi"],                poster:"🎞️", mood:["bold","inspiring","dark"],          era:"2010s"},
+  {id:55, title:"Gangs of Wasseypur",             year:2012, rating:8.2, genres:["Crime","Drama","Action"],       director:"Anurag Kashyap",           cast:["Manoj Bajpayee","Nawazuddin Siddiqui"],       poster:"🔫", mood:["dark","intense","epic","gangster"],  era:"2010s"},
+  {id:56, title:"Barfi!",                         year:2012, rating:8.1, genres:["Romance","Comedy","Drama"],     director:"Anurag Basu",              cast:["Ranbir Kapoor","Priyanka Chopra","Ileana D'Cruz"],poster:"🎩",mood:["feel-good","romantic","unique"],  era:"2010s"},
+  {id:57, title:"Kahaani",                        year:2012, rating:8.1, genres:["Thriller","Mystery","Drama"],   director:"Sujoy Ghosh",              cast:["Vidya Balan"],                               poster:"🔍", mood:["thriller","suspense","empowering"], era:"2010s"},
+  {id:58, title:"Paan Singh Tomar",               year:2012, rating:8.2, genres:["Biography","Sport","Drama"],    director:"Tigmanshu Dhulia",         cast:["Irrfan Khan"],                               poster:"🏃", mood:["inspiring","underrated","intense"],  era:"2010s"},
+  {id:59, title:"Vicky Donor",                    year:2012, rating:7.5, genres:["Comedy","Drama","Romance"],     director:"Shoojit Sircar",           cast:["Ayushmann Khurrana","Yami Gautam"],           poster:"🧬", mood:["comedy","feel-good","unique"],      era:"2010s"},
+  {id:60, title:"Ship of Theseus",               year:2013, rating:8.4, genres:["Drama","Philosophy"],           director:"Anand Gandhi",             cast:["Aida El-Kashef","Sohum Shah"],               poster:"⚓", mood:["philosophical","underrated","dark"], era:"2010s"},
+  {id:61, title:"The Lunchbox",                   year:2013, rating:7.8, genres:["Drama","Romance"],              director:"Ritesh Batra",             cast:["Irrfan Khan","Nimrat Kaur"],                  poster:"🍱", mood:["romantic","quiet","underrated"],    era:"2010s"},
+  {id:62, title:"Bhaag Milkha Bhaag",            year:2013, rating:8.2, genres:["Biography","Sport","Drama"],    director:"Rakeysh Omprakash Mehra",  cast:["Farhan Akhtar"],                             poster:"🏅", mood:["inspiring","sport","patriotic"],    era:"2010s"},
+  {id:63, title:"Kai Po Che!",                   year:2013, rating:8.1, genres:["Drama","Sport","Friendship"],   director:"Abhishek Kapoor",          cast:["Sushant Singh Rajput","Raj Kumar Yadav"],    poster:"🪁", mood:["feel-good","friendship","inspiring"],era:"2010s"},
+  {id:64, title:"Lootera",                        year:2013, rating:7.9, genres:["Romance","Drama","Thriller"],   director:"Vikramaditya Motwane",     cast:["Ranveer Singh","Sonakshi Sinha"],             poster:"🍂", mood:["romantic","slow-burn","underrated"], era:"2010s"},
+  {id:65, title:"Queen",                          year:2014, rating:8.1, genres:["Drama","Comedy"],               director:"Vikas Bahl",               cast:["Kangana Ranaut","Rajkummar Rao"],             poster:"👑", mood:["inspiring","feel-good","empowering"],era:"2010s"},
+  {id:66, title:"PK",                             year:2014, rating:8.1, genres:["Comedy","Drama","Sci-Fi"],      director:"Rajkumar Hirani",          cast:["Aamir Khan","Anushka Sharma"],                poster:"🛸", mood:["comedy","thought-provoking"],       era:"2010s"},
+  {id:67, title:"Haider",                         year:2014, rating:8.1, genres:["Drama","Thriller","Mystery"],   director:"Vishal Bhardwaj",          cast:["Shahid Kapoor","Tabu","Kay Kay Menon"],       poster:"❄️", mood:["dark","intense","epic"],            era:"2010s"},
+  {id:68, title:"2 States",                       year:2014, rating:7.4, genres:["Romance","Comedy","Drama"],     director:"Abhishek Varman",          cast:["Arjun Kapoor","Alia Bhatt"],                  poster:"🗺️", mood:["romantic","comedy","feel-good"],    era:"2010s"},
+  {id:69, title:"Highway",                        year:2014, rating:7.8, genres:["Drama","Adventure","Romance"],  director:"Imtiaz Ali",               cast:["Alia Bhatt","Randeep Hooda"],                 poster:"🛣️", mood:["inspiring","travel","emotional"],   era:"2010s"},
+  {id:70, title:"Drishyam",                       year:2015, rating:8.2, genres:["Crime","Thriller","Drama"],     director:"Nishikant Kamat",          cast:["Ajay Devgn","Tabu","Shriya Saran"],           poster:"📺", mood:["thriller","suspense","dark"],       era:"2010s"},
+  {id:71, title:"Masaan",                         year:2015, rating:8.2, genres:["Drama","Romance"],              director:"Neeraj Ghaywan",           cast:["Vicky Kaushal","Richa Chadha"],               poster:"🕊️", mood:["emotional","underrated","quiet"],   era:"2010s"},
+  {id:72, title:"Bajrangi Bhaijaan",             year:2015, rating:8.0, genres:["Drama","Adventure","Comedy"],   director:"Kabir Khan",               cast:["Salman Khan","Kareena Kapoor"],               poster:"🙏", mood:["feel-good","emotional","inspiring"], era:"2010s"},
+  {id:73, title:"NH10",                           year:2015, rating:7.2, genres:["Thriller","Action","Drama"],    director:"Navdeep Singh",            cast:["Anushka Sharma"],                            poster:"🛻", mood:["dark","intense","thriller"],        era:"2010s"},
+  {id:74, title:"Piku",                           year:2015, rating:8.1, genres:["Comedy","Drama","Family"],      director:"Shoojit Sircar",           cast:["Amitabh Bachchan","Deepika Padukone","Irrfan Khan"],poster:"🚗",mood:["feel-good","family","comedy"],  era:"2010s"},
+  {id:75, title:"Talvar",                         year:2015, rating:8.3, genres:["Crime","Thriller","Mystery"],   director:"Meghna Gulzar",            cast:["Irrfan Khan","Konkona Sen Sharma"],           poster:"⚖️", mood:["thriller","dark","thought-provoking"],era:"2010s"},
+  {id:76, title:"Udta Punjab",                    year:2016, rating:8.1, genres:["Crime","Drama","Social"],       director:"Abhishek Chaubey",         cast:["Shahid Kapoor","Alia Bhatt","Diljit Dosanjh"],poster:"💊", mood:["dark","social","intense"],          era:"2010s"},
+  {id:77, title:"Dangal",                         year:2016, rating:8.3, genres:["Drama","Sport","Biography"],    director:"Nitesh Tiwari",            cast:["Aamir Khan","Fatima Sana Shaikh"],            poster:"🤼", mood:["inspiring","sport","family"],       era:"2010s"},
+  {id:78, title:"Neerja",                         year:2016, rating:7.9, genres:["Biography","Thriller","Drama"], director:"Ram Madhvani",             cast:["Sonam Kapoor"],                              poster:"✈️", mood:["inspiring","emotional","patriotic"], era:"2010s"},
+  {id:79, title:"Kapoor & Sons",                 year:2016, rating:7.8, genres:["Drama","Family","Romance"],     director:"Shakun Batra",             cast:["Sidharth Malhotra","Alia Bhatt","Fawad Khan"], poster:"🏡", mood:["emotional","family","quiet"],       era:"2010s"},
+  {id:80, title:"Raees",                          year:2017, rating:7.3, genres:["Crime","Drama","Action"],       director:"Rahul Dholakia",           cast:["Shah Rukh Khan","Mahira Khan"],               poster:"🥃", mood:["intense","gangster","action"],      era:"2010s"},
+  {id:81, title:"Andhadhun",                      year:2018, rating:8.3, genres:["Thriller","Crime","Comedy"],    director:"Sriram Raghavan",          cast:["Ayushmann Khurrana","Tabu"],                  poster:"🎹", mood:["thriller","suspense","dark"],       era:"2010s"},
+  {id:82, title:"Tumbbad",                        year:2018, rating:8.2, genres:["Horror","Fantasy","Thriller"],  director:"Rahi Anil Barve",          cast:["Sohum Shah"],                                poster:"🕯️", mood:["dark","horror","atmospheric","underrated"],era:"2010s"},
+  {id:83, title:"Stree",                          year:2018, rating:7.7, genres:["Horror","Comedy","Mystery"],    director:"Amar Kaushik",             cast:["Rajkummar Rao","Shraddha Kapoor"],            poster:"👻", mood:["horror","comedy","fun"],            era:"2010s"},
+  {id:84, title:"Padmaavat",                      year:2018, rating:7.0, genres:["Drama","History","Romance"],    director:"Sanjay Leela Bhansali",    cast:["Deepika Padukone","Shahid Kapoor","Ranveer Singh"],poster:"🏛️",mood:["epic","historical","visually stunning"],era:"2010s"},
+  {id:85, title:"Raazi",                          year:2018, rating:7.8, genres:["Thriller","Drama","Spy"],       director:"Meghna Gulzar",            cast:["Alia Bhatt","Vicky Kaushal"],                 poster:"🔐", mood:["thriller","patriotic","emotional"],  era:"2010s"},
+  {id:86, title:"Gully Boy",                      year:2019, rating:7.9, genres:["Drama","Music","Biography"],    director:"Zoya Akhtar",              cast:["Ranveer Singh","Alia Bhatt"],                 poster:"🎤", mood:["inspiring","music","urban"],        era:"2010s"},
+  {id:87, title:"Article 15",                     year:2019, rating:8.1, genres:["Crime","Drama","Social"],       director:"Anubhav Sinha",            cast:["Ayushmann Khurrana"],                         poster:"⚖️", mood:["thought-provoking","intense","social"],era:"2010s"},
+  {id:88, title:"Uri: The Surgical Strike",       year:2019, rating:8.3, genres:["Action","Drama","War"],         director:"Aditya Dhar",              cast:["Vicky Kaushal","Paresh Rawal"],               poster:"🇮🇳", mood:["action","patriotic","intense"],     era:"2010s"},
+  {id:89, title:"Kabir Singh",                    year:2019, rating:7.1, genres:["Romance","Drama"],              director:"Sandeep Reddy Vanga",      cast:["Shahid Kapoor","Kiara Advani"],               poster:"🔥", mood:["intense","romantic"],               era:"2010s"},
+  {id:90, title:"Section 375",                    year:2019, rating:8.1, genres:["Crime","Drama","Thriller"],     director:"Ajay Bahl",                cast:["Akshaye Khanna","Richa Chadha"],              poster:"🔨", mood:["thriller","thought-provoking","dark"],era:"2010s"},
+  // ── 2020s ──
+  {id:91, title:"Gulabo Sitabo",                  year:2020, rating:7.3, genres:["Comedy","Drama"],               director:"Shoojit Sircar",           cast:["Amitabh Bachchan","Ayushmann Khurrana"],      poster:"🏚️", mood:["comedy","quirky","underrated"],     era:"2020s"},
+  {id:92, title:"Ludo",                           year:2020, rating:7.4, genres:["Comedy","Thriller","Crime"],    director:"Anurag Basu",              cast:["Abhishek Bachchan","Aditya Roy Kapur","Rajkummar Rao"],poster:"🎲",mood:["fun","thriller","quirky"],    era:"2020s"},
+  {id:93, title:"Durgamati",                      year:2020, rating:5.8, genres:["Horror","Thriller"],            director:"G. Ashok",                 cast:["Bhumi Pednekar"],                            poster:"👁️", mood:["horror","thriller"],                era:"2020s"},
+  {id:94, title:"Shershaah",                      year:2021, rating:8.4, genres:["Biography","War","Action"],     director:"Vishnuvardhan",            cast:["Sidharth Malhotra","Kiara Advani"],           poster:"🎖️", mood:["patriotic","inspiring","action"],   era:"2020s"},
+  {id:95, title:"Sardar Udham",                   year:2021, rating:8.4, genres:["Biography","History","Drama"],  director:"Shoojit Sircar",           cast:["Vicky Kaushal"],                             poster:"🕯️", mood:["patriotic","intense","inspiring"],  era:"2020s"},
+  {id:96, title:"Haseen Dillruba",               year:2021, rating:7.1, genres:["Thriller","Romance","Crime"],   director:"Vinil Mathew",             cast:["Taapsee Pannu","Vikrant Massey"],             poster:"🔪", mood:["thriller","romantic","dark"],       era:"2020s"},
+  {id:97, title:"Gangubai Kathiawadi",            year:2022, rating:7.8, genres:["Biography","Crime","Drama"],    director:"Sanjay Leela Bhansali",    cast:["Alia Bhatt"],                                poster:"💄", mood:["inspiring","empowering","dark"],    era:"2020s"},
+  {id:98, title:"The Kashmir Files",             year:2022, rating:8.3, genres:["Drama","History","Social"],     director:"Vivek Agnihotri",          cast:["Anupam Kher","Mithun Chakraborty"],           poster:"❄️", mood:["intense","patriotic","emotional"],  era:"2020s"},
+  {id:99, title:"Brahmastra: Part One",          year:2022, rating:5.6, genres:["Action","Fantasy","Sci-Fi"],    director:"Ayan Mukerji",             cast:["Ranbir Kapoor","Alia Bhatt","Amitabh Bachchan"],poster:"🔱",mood:["action","fantasy","epic"],       era:"2020s"},
+  {id:100,title:"Jawan",                          year:2023, rating:7.0, genres:["Action","Thriller","Drama"],    director:"Atlee",                    cast:["Shah Rukh Khan","Nayanthara","Deepika Padukone"],poster:"🚨",mood:["action","fun","masala"],         era:"2020s"},
+];
+
+// Build indexes
+const BACTOR = {};
+BOLLYWOOD.forEach(m => m.cast.forEach(a => {
+  const k = a.toLowerCase();
+  if(!BACTOR[k]) BACTOR[k] = [];
+  BACTOR[k].push(m);
+}));
+
+const BERA = {};
+BOLLYWOOD.forEach(m => {
+  if(!BERA[m.era]) BERA[m.era] = [];
+  BERA[m.era].push(m);
+});
+
+const BGENRE = {};
+BOLLYWOOD.forEach(m => m.genres.forEach(g => {
+  if(!BGENRE[g]) BGENRE[g] = [];
+  BGENRE[g].push(m);
+}));
+
+const BMOOD = {};
+BOLLYWOOD.forEach(m => m.mood.forEach(md => {
+  if(!BMOOD[md]) BMOOD[md] = [];
+  BMOOD[md].push(m);
+}));
+
+function bTopN(arr, n=5) { return [...arr].sort((a,b)=>b.rating-a.rating).slice(0,n); }
 
